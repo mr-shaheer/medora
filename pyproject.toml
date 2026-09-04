@@ -1,0 +1,10 @@
+[project]
+name = "medora"
+version = "0.1.0"
+description = "An autonomous agentic system for doctors, medical students, healthcare professionals and researchers to discover and synthesize clinical evidence."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "dotenv>=0.9.9",
+    "openai-agents>=0.20.0",
+]
