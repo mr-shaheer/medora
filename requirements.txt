@@ -1,0 +1,6 @@
+openai-agents
+openai
+psycopg[binary]
+pgvector
+python-dotenv
+pydantic
