@@ -11,8 +11,9 @@
 [![Gemini](https://img.shields.io/badge/Gemini-2.5%20%2F%203.5-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white)](https://ai.google.dev/)
 [![Postgres](https://img.shields.io/badge/Neon-pgvector-00E599?style=for-the-badge&logo=postgresql&logoColor=white)](https://neon.tech/)
 [![Pydantic](https://img.shields.io/badge/Pydantic-v2-E92063?style=for-the-badge&logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
-[Overview](#-overview) • [How It Works](#-how-it-works) • [Features](#-features) • [Quickstart](#-quickstart) • [Usage](#-usage) • [Architecture](#-architecture)
+[Overview](#-overview) • [How It Works](#-how-it-works) • [Features](#-features) • [Quickstart](#-quickstart) • [Usage](#-usage)
 
 </div>
 
@@ -221,7 +222,7 @@ You: /exit
 
 ## 📄 License
 
-No license file is currently included — add one (MIT, Apache-2.0, etc.) before distributing.
+Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for details.
 
 ---
 
