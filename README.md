@@ -1,17 +1,18 @@
 <div align="center">
 
-# 🩺 Medora
+# 🧬 Medora
 
-**An autonomous, agentic evidence-synthesis engine for medical research.**
+### An autonomous agentic system for discovering and synthesizing clinical evidence.
 
-Medora routes a clinical question to the right biomedical data source, retrieves and ranks the evidence, reasons over it with an LLM, and then verifies its own answer against that evidence before it ever reaches you.
+*Multi-source medical retrieval, hybrid vector search, and citation-grounded reasoning — built on the OpenAI Agents SDK and Gemini.*
 
-[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](#-license)
-[![Status: Research Preview](https://img.shields.io/badge/status-research%20preview-orange.svg)](#-disclaimer)
-[![Built with OpenAI Agents SDK](https://img.shields.io/badge/built%20with-openai--agents--sdk-black.svg)](https://github.com/openai/openai-agents-python)
+[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![OpenAI Agents SDK](https://img.shields.io/badge/OpenAI_Agents_SDK-0.20+-412991?style=for-the-badge&logo=openai&logoColor=white)](https://github.com/openai/openai-agents-python)
+[![Gemini](https://img.shields.io/badge/Gemini-2.5%20%2F%203.5-8E75B2?style=for-the-badge&logo=googlegemini&logoColor=white)](https://ai.google.dev/)
+[![Postgres](https://img.shields.io/badge/Neon-pgvector-00E599?style=for-the-badge&logo=postgresql&logoColor=white)](https://neon.tech/)
+[![Pydantic](https://img.shields.io/badge/Pydantic-v2-E92063?style=for-the-badge&logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
 
-[Overview](#-overview) • [How It Works](#-how-it-works) • [Getting Started](#-getting-started) • [Usage](#-usage) • [Architecture](#-project-structure) • [Configuration](#-configuration) • [Disclaimer](#-disclaimer)
+[Overview](#-overview) • [How It Works](#-how-it-works) • [Features](#-features) • [Quickstart](#-quickstart) • [Usage](#-usage) • [Architecture](#-architecture)
 
 </div>
 
@@ -19,248 +20,213 @@ Medora routes a clinical question to the right biomedical data source, retrieves
 
 ## 📖 Overview
 
-Medora is a command-line research assistant built for **doctors, medical students, healthcare professionals, and researchers** who need to synthesize clinical evidence quickly — without sacrificing traceability.
+**Medora** takes a clinical research question — *"Is metformin effective for PCOS in adolescents?"* — and turns it into a **cited, evidence-grounded answer**, sourced live from PubMed, ClinicalTrials.gov, and OpenFDA.
 
-Instead of asking a single LLM to "know" the answer, Medora treats every question as a small research pipeline:
+Rather than asking one model to "know" medicine, Medora is built as a **pipeline of specialized stages**: a router picks the right medical database, an agent retrieves raw documents through MCP tools, the evidence is chunked and deduplicated, a Postgres + pgvector store performs hybrid semantic/keyword search, a reasoning agent drafts an answer with inline citations, and a final verifier agent checks that draft against the evidence before anything is shown to the user.
 
-1. **Understand** what kind of question is being asked (literature? trials? drug safety?).
-2. **Retrieve** primary-source documents from live medical MCP servers.
-3. **Rank** that evidence by relevance and study design.
-4. **Reason** over only the retrieved evidence — never the model's parametric memory.
-5. **Verify** the draft answer against that same evidence and strip out anything unsupported.
-
-Every claim in a Medora answer is expected to carry an inline citation (`[PMID:xxxxx]` or `[DOI:xxxxx]`) back to a real, retrieved source.
-
-<br>
-
-<details>
-<summary><strong>💡 Why not just ask an LLM directly?</strong></summary>
-<br>
-
-General-purpose LLMs are prone to hallucinating citations and blending outdated training data with current guidance. Medora constrains the model at two points instead of one:
-
-- The **Evidence Reasoner** is instructed to use *only* the supplied evidence chunks and to cite every claim.
-- The **Grounding Verifier** independently re-checks the draft against the same evidence and removes or corrects anything unsupported — including fabricated PMIDs/DOIs.
-
-This "generate, then verify" pattern trades a bit of latency for a much stronger grounding guarantee.
-
-</details>
-
-<details>
-<summary><strong>🗂️ What sources does it query?</strong></summary>
-<br>
-
-Medora connects to biomedical data over the **Model Context Protocol (MCP)**:
-
-| Source | Covers |
-|---|---|
-| **PubMed** | Peer-reviewed biomedical literature, systematic reviews, meta-analyses |
-| **ClinicalTrials.gov** | Trial protocols, recruitment/enrollment status, study design |
-| **OpenFDA** | Drug approvals, labels, adverse events, recalls, contraindications |
-
-</details>
+> 💡 **Why this project matters:** it's a worked example of *retrieval-augmented reasoning done carefully* — hybrid search (not just embeddings), a rerank step that respects clinical evidence hierarchy, retracted-study filtering, a self-maintaining cache with TTL + LRU eviction, and a dedicated grounding pass so the model can't quietly hallucinate a citation.
 
 ---
 
-## ⚙️ How It Works
-
-Every question runs through a six-step pipeline (see [`app/pipeline.py`](app/pipeline.py)):
+## 🧠 How It Works
 
 ```mermaid
 flowchart TD
-    Q["🧑 User question"] --> R["1. Router\nkeyword + LLM fallback"]
-    R -->|selects source(s)| M["MCP Retriever Agent"]
-    M -->|PubMed / ClinicalTrials / OpenFDA| D["Raw documents"]
-    D --> P["2. Evidence Pool\ndedupe · clean · classify · chunk"]
-    P --> V["3. Vector Store (Neon + pgvector)\nembed · hybrid search · RRF fuse"]
-    V --> RR["Rerank\nby study-type priority"]
-    RR --> ER["4. Evidence Reasoner\ncites [PMID]/[DOI]"]
-    ER --> GV["5. Grounding Verifier\nstrips unsupported claims"]
-    GV --> A["✅ Final, cited answer"]
+    U([👤 Research Question]) --> KR
 
-    style Q fill:#1f6feb,color:#fff
-    style A fill:#2ea043,color:#fff
+    subgraph Router["🧭 MCP Router"]
+        KR[Keyword Router] -->|"confidence ≥ 0.80"| D1[Route decided]
+        KR -->|"confidence < 0.80"| LR[LLM Router - Gemini 2.5 Flash]
+        LR --> D1
+    end
+
+    D1 --> RET
+
+    subgraph Retrieval["🔬 Evidence Retrieval"]
+        RET[Retriever Agent] --> MCP1[(PubMed MCP)]
+        RET --> MCP2[(ClinicalTrials MCP)]
+        RET --> MCP3[(OpenFDA MCP)]
+    end
+
+    MCP1 --> EP
+    MCP2 --> EP
+    MCP3 --> EP
+
+    subgraph Pool["🧹 Evidence Pool"]
+        EP[Dedupe + Retraction Filter] --> CH[Chunk + Classify Study Type]
+    end
+
+    CH --> VS
+
+    subgraph Store["🗄️ Neon + pgvector"]
+        VS[(Embed & Upsert)] --> HS[Hybrid Search<br/>semantic + keyword, RRF fusion]
+    end
+
+    HS --> RR[Rerank by Study-Type Priority]
+    RR --> ER[Evidence Reasoner Agent]
+    ER --> GV{{🛡️ Grounding Verifier}}
+    GV --> OUT([✅ Cited Final Answer])
+
+    M[(Maintenance Loop:<br/>purge retracted / expire stale / cap rows)] -.-> VS
 ```
 
-### The pipeline, stage by stage
-
-| Stage | Module | What it does |
-|---|---|---|
-| **1. Routing** | [`router/main_router.py`](app/router/main_router.py) | A fast keyword-based router scores the question against PubMed / ClinicalTrials / OpenFDA vocabularies. If it isn't confident (`< 0.80`), an LLM router ([`router/llm_router.py`](app/router/llm_router.py)) makes the call instead. |
-| **2. Retrieval** | [`pipeline.py`](app/pipeline.py) → `plan_and_retrieve` | An `Agent` connects to the chosen MCP server(s) and pulls raw documents — never summarizing, never inventing results. |
-| **3. Evidence Pool** | [`retrieval/evidence_pool.py`](app/retrieval/evidence_pool.py) | Deduplicates by PMID/DOI/study ID, strips retracted papers, classifies study design (RCT, cohort, meta-analysis, etc.), and chunks text for embedding. |
-| **4. Vector Store** | [`retrieval/vector_store.py`](app/retrieval/vector_store.py) | Chunks are embedded (Gemini embeddings) and cached in **Neon Postgres + pgvector**. Retrieval is **hybrid**: semantic similarity (pgvector) fused with full-text search (`tsvector`) via Reciprocal Rank Fusion. |
-| **5. Rerank** | [`retrieval/rerank.py`](app/retrieval/rerank.py) | Fused candidates are reordered by study-type priority (e.g. meta-analyses before case reports) before being trimmed to the top-k. |
-| **6. Reasoning + Verification** | [`agents/evidence_reasoner.py`](app/agents/evidence_reasoner.py), [`agents/verifier.py`](app/agents/verifier.py) | One agent drafts a cited answer from the evidence; a second, independent agent checks that draft against the same evidence and removes anything unsupported. |
-
-<details>
-<summary><strong>🧹 How the evidence cache stays bounded</strong></summary>
-<br>
-
-The vector store is a **cache, not an archive** — PubMed/MCP sources remain the source of truth. `cli.py` runs a maintenance pass on startup and every 24 hours that:
-
-- **Purges retracted papers** outright (`purge_retracted`)
-- **Expires stale chunks** unused for `EVIDENCE_TTL_DAYS` (default: 60 days)
-- **Enforces a row cap** (`EVIDENCE_MAX_ROWS`, default: 50,000) via LRU eviction
-
-This keeps the Postgres table self-healing without an external cron job.
-
-</details>
+1. **You ask a clinical research question.**
+2. A **two-tier router** decides which medical source(s) to query: a fast **keyword router** scores the question against curated term lists for PubMed, ClinicalTrials, and OpenFDA; if it isn't confident (score < 0.80), an **LLM router** (Gemini 2.5 Flash) breaks the tie.
+3. A **retriever agent** connects to the chosen source(s) as **MCP servers** and pulls back raw documents (abstracts, trial records, drug labels) as structured JSON — never summarizing, just fetching.
+4. The **Evidence Pool** deduplicates documents, strips out retracted papers, classifies each one by study design (meta-analysis, RCT, cohort, case-report, ...), and splits long text into overlapping chunks.
+5. Chunks are embedded and upserted into a **Neon Postgres + pgvector** store. A **hybrid search** — vector similarity fused with full-text keyword search via **Reciprocal Rank Fusion** — pulls the top candidates, catching both semantic matches and exact terms (drug names, gene symbols, dosages) that embeddings alone can blur.
+6. Candidates are **reranked** so higher-quality study designs (meta-analyses, RCTs) are preferred over case reports.
+7. An **Evidence Reasoner agent** drafts an answer strictly from the retrieved chunks, citing every claim inline as `[PMID:xxxxx]` or `[DOI:xxxxx]`.
+8. A **Grounding Verifier agent** checks the draft against the evidence a second time — trimming unsupported claims and refusing to invent new citations — before the final answer is returned.
+9. In the background, a **maintenance loop** keeps the evidence cache bounded: retracted papers are purged, stale chunks expire after a TTL, and the table is capped with LRU eviction.
 
 ---
 
-## 🚀 Getting Started
+## ✨ Features
+
+| | |
+|---|---|
+| 🧭 **Two-tier source routing** | A cheap, deterministic keyword router handles the obvious cases; an LLM router (Gemini) only gets called when the signal is ambiguous. |
+| 🔌 **Multi-source MCP retrieval** | Pulls live evidence from **PubMed**, **ClinicalTrials.gov**, and **OpenFDA** through Model Context Protocol servers — not a static dataset. |
+| 🧹 **Evidence Pool preprocessing** | Deduplicates documents by PMID/DOI/study ID, detects and drops retracted papers, classifies study design by regex, and chunks text with configurable size/overlap. |
+| 🔎 **Hybrid retrieval** | Combines pgvector semantic search with Postgres full-text keyword search, fused with **Reciprocal Rank Fusion** — so exact clinical terms aren't lost to embedding fuzziness. |
+| 📊 **Evidence-hierarchy reranking** | Candidates are reordered so meta-analyses and RCTs outrank cohort studies and case reports, using the study-type priority returned by the retriever. |
+| ✍️ **Citation-grounded reasoning** | The Evidence Reasoner agent may only use supplied evidence and must cite every claim inline — no evidence, no claim. |
+| 🛡️ **Independent grounding verifier** | A second agent re-checks the draft answer against the evidence, removing unsupported claims and blocking fabricated PMIDs/DOIs, or reporting "Insufficient evidence to answer." |
+| ♻️ **Self-maintaining cache** | A background loop purges retracted rows, expires chunks unused for `EVIDENCE_TTL_DAYS`, and LRU-evicts once the table exceeds `EVIDENCE_MAX_ROWS` — all tunable via env vars, no code changes needed. |
+| 🧩 **Typed, traceable pipeline** | Every stage is a plain function or `Agent`, wired together under a single `trace("Medical Research Pipeline")` span for observability. |
+
+---
+
+## 🏗️ Architecture
+
+```
+medora/
+├── cli.py                          # Entry point: input loop + background cache maintenance
+├── requirements.txt
+├── pyproject.toml
+│
+└── app/
+    ├── model.py                    # Gemini client config (OpenAI-compatible endpoint), embedding + DB settings
+    ├── pipeline.py                 # Orchestrates the full 6-step retrieval → reasoning → verification flow
+    │
+    ├── router/
+    │   ├── main_router.py          # Combines keyword + LLM routing into one decision
+    │   ├── keyword_router.py       # Rule-based scoring across PubMed / ClinicalTrials / OpenFDA term lists
+    │   ├── llm_router.py           # Gemini-backed fallback router for ambiguous queries
+    │   └── metadata.py             # Descriptions of each MCP source, used in router prompts
+    │
+    ├── mcp/
+    │   └── mcp_client.py           # MCP server definitions/connections for PubMed, ClinicalTrials, OpenFDA
+    │
+    ├── retrieval/
+    │   ├── evidence_pool.py        # Dedup, retraction filtering, study-type classification, chunking
+    │   ├── vector_store.py         # Neon/pgvector: embed, upsert, hybrid search, TTL + LRU maintenance
+    │   └── rerank.py               # Reorders candidates by study-type priority
+    │
+    └── agents/
+        ├── evidence_reasoner.py    # Drafts a cited answer strictly from retrieved evidence chunks
+        └── verifier.py             # Cross-checks the draft against evidence, strips unsupported claims
+```
+
+**Two purpose-built agents, one retriever.** The `EvidenceReasoner` and `GroundingVerifier` agents both run on the stronger model tier (`high_model`, Gemini 3.5 Flash) since drafting and fact-checking a clinical answer benefit from stronger reasoning; the fallback router uses the faster `gemini-2.5-flash` since it only has to pick one of three sources.
+
+**Retrieval is hybrid by design.** `vector_store.py` runs semantic (pgvector) and keyword (Postgres full-text) search in parallel and fuses them with **Reciprocal Rank Fusion**, so a query about a specific biomarker or drug name isn't lost to embedding similarity alone.
+
+**The cache knows its own boundaries.** The `evidence_chunks` table is explicitly a cache, not an archive — PubMed/ClinicalTrials/OpenFDA remain the source of truth. Retracted papers are deleted outright, unused chunks expire on a TTL, and a row cap enforces LRU eviction, all driven from `cli.py`'s startup + background maintenance loop.
+
+---
+
+## 🧰 Tech Stack
+
+- **[OpenAI Agents SDK](https://github.com/openai/openai-agents-python)** — agent definitions, `Runner`, MCP server integration, tracing
+- **Google Gemini** (`2.5-flash` / `3.5-flash`) — via an OpenAI-compatible endpoint, for routing, reasoning, and grounding
+- **Model Context Protocol (MCP)** — live connections to PubMed, ClinicalTrials.gov, and OpenFDA servers
+- **Neon Postgres + pgvector** — hybrid semantic/keyword evidence store with HNSW indexing
+- **Pydantic v2** — typed router results and structured LLM output parsing
+- **psycopg** — async-friendly Postgres driver
+
+---
+
+## 🚀 Quickstart
 
 ### Prerequisites
+- Python 3.12+
+- A [Gemini API key](https://ai.google.dev/)
+- A [Neon](https://neon.tech/) (or any Postgres instance with the `pgvector` extension available)
 
-- **Python 3.12+**
-- A **Gemini API key** (used for both the LLM agents and embeddings)
-- A **Neon Postgres** database with the `pgvector` extension available
-
-### Installation
-
-<details open>
-<summary><strong>Using <code>uv</code> (recommended — this project ships a <code>uv.lock</code>)</strong></summary>
+### 1. Clone & install
 
 ```bash
-git clone <your-fork-or-repo-url>
+git clone <your-repo-url>
 cd medora
+
+# using uv (recommended — a uv.lock is included)
 uv sync
-```
-</details>
 
-<details>
-<summary><strong>Using <code>pip</code></strong></summary>
-
-```bash
-git clone <your-fork-or-repo-url>
-cd medora
-python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+# or with pip
 pip install -r requirements.txt
 ```
-</details>
 
-### Configuration
+### 2. Configure environment
 
 Create a `.env` file in the project root:
 
-```bash
-# Required
-GEMINI_API_KEY=your-gemini-api-key
+```ini
+GEMINI_API_KEY=your_gemini_key_here
 NEON_DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
 
-# Optional (sensible defaults shown)
+# Optional overrides
 GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 EMBEDDING_DIM=1536
 EVIDENCE_MAX_ROWS=50000
 EVIDENCE_TTL_DAYS=60
 ```
 
-> On first run, Medora creates the `evidence_chunks` table and its indexes (HNSW for vector search, GIN for full-text) automatically — no manual migration needed.
-
----
-
-## 🧑‍💻 Usage
-
-Launch the interactive research CLI:
+### 3. Run it
 
 ```bash
-uv run cli.py
-# or, with pip/venv:
 python cli.py
 ```
 
-```text
-You: What does recent evidence say about SGLT2 inhibitors in heart failure with preserved ejection fraction?
+> **Note:** `cli.py` and the modules under `app/` currently reference each other with flat imports (e.g. `from app.pipeline import run`, `from rerank import rerank`). Depending on your environment, you may need to run from inside `app/` or add `app/`, `app/router/`, `app/retrieval/`, and `app/agents/` to your `PYTHONPATH` for these to resolve.
 
->>> STEP 1: BioMCP Retriever
+---
+
+## 💬 Usage
+
+```
+You: Is metformin effective for PCOS in adolescents?
+
 >>> MCP ROUTER: pubmed (confidence=0.85)
+>>> STEP 1: BioMCP Retriever
 >>> STEP 2: Evidence Pool
 >>> STEP 3: Vector Search
 >>> STEP 4: Evidence Reasoner
 >>> STEP 5: Grounding Verifier
 >>> STEP 6: Done
+Researcher: Metformin shows modest improvement in menstrual regularity and
+insulin sensitivity in adolescents with PCOS across several small RCTs
+[PMID:xxxxxxx], though evidence on long-term outcomes remains limited
+[PMID:xxxxxxx]. ...
 
-Researcher: Recent RCT evidence supports a benefit of SGLT2 inhibitors in HFpEF,
-reducing the composite of cardiovascular death or heart failure hospitalization
-[PMID:xxxxxxx] ...
+You: /exit
 ```
 
-**In-session commands:**
-
-| Command | Effect |
-|---|---|
-| `/reset` | Clears the current session |
-| `/quit` or `/exit` | Ends the session |
+- Type `/reset` to clear the current session.
+- Type `/exit` or `/quit` to leave.
+- Cache maintenance (purge retracted / expire stale / enforce row cap) runs once at startup and then every 24 hours in the background.
 
 ---
-
-## 🗺️ Project Structure
-
-```text
-medora/
-├── cli.py                        # Interactive entry point + cache maintenance loop
-├── pyproject.toml / uv.lock      # Project metadata & locked dependencies
-├── requirements.txt              # pip-compatible dependency list
-└── app/
-    ├── model.py                  # LLM + embedding client config (Gemini via OpenAI-compatible API)
-    ├── pipeline.py                # Orchestrates the full 6-step research pipeline
-    ├── router/
-    │   ├── keyword_router.py     # Fast, rule-based source scoring
-    │   ├── llm_router.py         # LLM fallback router (structured output)
-    │   ├── main_router.py        # Combines keyword + LLM routing by confidence
-    │   └── metadata.py           # MCP source descriptions
-    ├── mcp/
-    │   └── mcp_client.py         # MCP server connections (PubMed, ClinicalTrials, OpenFDA)
-    ├── retrieval/
-    │   ├── evidence_pool.py      # Dedup, cleaning, study-type classification, chunking
-    │   ├── vector_store.py       # Neon/pgvector storage, hybrid search, cache maintenance
-    │   └── rerank.py             # Study-type-aware reranking
-    └── agents/
-        ├── evidence_reasoner.py  # Drafts a cited answer from evidence only
-        └── verifier.py           # Grounds/corrects the draft against the evidence
-```
-
----
-
-## 🧩 Configuration Reference
-
-<details>
-<summary><strong>Full environment variable reference</strong></summary>
-<br>
-
-| Variable | Default | Description |
-|---|---|---|
-| `GEMINI_API_KEY` | — | API key for the Gemini models used for reasoning, routing, and embeddings |
-| `NEON_DATABASE_URL` | — | Postgres connection string (Neon or any Postgres with `pgvector`) |
-| `GEMINI_EMBEDDING_MODEL` | `gemini-embedding-001` | Embedding model used for the evidence cache |
-| `EMBEDDING_DIM` | `1536` | Embedding vector dimensionality |
-| `EVIDENCE_MAX_ROWS` | `50000` | Row cap for the evidence cache before LRU eviction kicks in |
-| `EVIDENCE_TTL_DAYS` | `60` | Days a chunk can go unused before it's expired |
-
-</details>
-
-<details>
-<summary><strong>Routing thresholds</strong></summary>
-<br>
-
-- The keyword router scores each source on **strong** (+5) and **weak** (+1) term matches.
-- If the top score's confidence is **≥ 0.80**, that decision is used directly.
-- Otherwise, control falls back to the **LLM router**, which picks a single best source with its own confidence score.
-
-</details>
-
-## ⚠️ Disclaimer
-
-Medora is a **research and information-retrieval tool**, not a diagnostic or treatment-decision system. It is intended to support literature review and evidence discovery for qualified professionals and researchers — it does **not** provide medical advice, and its output should always be independently verified against primary sources before being used in any clinical decision.
-
----
-
-## 🤝 Contributing
-
-Issues and pull requests are welcome. Please open an issue to discuss significant changes before submitting a PR.
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for details.
+No license file is currently included — add one (MIT, Apache-2.0, etc.) before distributing.
+
+---
+
+<div align="center">
+
+*Medora synthesizes evidence, it doesn't replace clinical judgment. Always verify against primary sources.*
+
+</div>
