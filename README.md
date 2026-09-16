@@ -4,7 +4,7 @@
 
 ### An autonomous agentic system for discovering and synthesizing clinical evidence.
 
-*Multi-source medical retrieval, hybrid vector search, and citation-grounded reasoning — built on the OpenAI Agents SDK and Gemini.*
+*Multi-source medical research, trusted evidence and clear answers - designed to make complex medical information easier to explore and understand.*
 
 [![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![OpenAI Agents SDK](https://img.shields.io/badge/OpenAI_Agents_SDK-0.20+-412991?style=for-the-badge&logo=openai&logoColor=white)](https://github.com/openai/openai-agents-python)
@@ -21,7 +21,7 @@
 
 ## 📖 Overview
 
-**Medora** takes a clinical research question — *"Is metformin effective for PCOS in adolescents?"* — and turns it into a **cited, evidence-grounded answer**, sourced live from PubMed, ClinicalTrials.gov, and OpenFDA.
+**Medora** takes a clinical research question - *"Is metformin effective for PCOS in adolescents?"* - and turns it into a **cited, evidence-grounded answer**, sourced live from PubMed, ClinicalTrials.gov and OpenFDA.
 
 Rather than asking one model to "know" medicine, Medora is built as a **pipeline of specialized stages**: a router picks the right medical database, an agent retrieves raw documents through MCP tools, the evidence is chunked and deduplicated, a Postgres + pgvector store performs hybrid semantic/keyword search, a reasoning agent drafts an answer with inline citations, and a final verifier agent checks that draft against the evidence before anything is shown to the user.
 
