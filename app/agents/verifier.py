@@ -1,5 +1,3 @@
-"""LLM #3 - Grounding & Verification."""
-
 import json
 from dataclasses import dataclass
 
@@ -22,13 +20,38 @@ Rules:
 - Never invent facts or citations.
 - Never create new PMID or DOI citations.
 - Keep existing valid citations.
+- Keep the answer in the required format below. If the draft is not in this
+  format, restructure it into it WITHOUT adding new claims.
+- Evidence from clinical trial registries (NCT ids) describes study plans, not
+  results. Never state a registry record as a finding. At most say a study
+  "is registered to investigate…" and give its status if known.
+
+REQUIRED FORMAT for the "answer" value (plain text only):
+## Bottom Line
+2-3 sentences directly answering the question.
+
+## Key Findings
+- one finding per bullet, citation at the end [PMID:xxxxx]
+
+## Strength of Evidence
+- 1-3 sentences on study design and consistency.
+- State the publication year range of the studies and note if the most recent evidence is older than 3 years.
+
+## Limitations & Gaps
+- bullets on conflicts, missing data, caveats
+
+Formatting rules: headings are lines starting with "## ", bullets start with
+"- ", blank line between sections. No bold, italics, tables or numbered lists.
+Remove any bullet whose claim is unsupported. If a section has nothing
+supported, write one plain sentence saying so.
 
 Return ONLY a JSON object with exactly these keys:
 {
   "status": "SUFFICIENT" | "INSUFFICIENT",
-  "answer": "<the corrected final answer, or 'Insufficient evidence to answer.' if INSUFFICIENT>",
+  "answer": "<the corrected final answer in the format above, or 'Insufficient evidence to answer.' if INSUFFICIENT>",
   "missing": "<short note on what evidence would resolve it, empty string if SUFFICIENT>"
 }
+Use \\n for line breaks inside the "answer" string.
 """
 
 verifier_agent = Agent(
@@ -50,7 +73,7 @@ def _parse(text: str) -> VerificationResult:
     if start == -1 or end == -1:
         return VerificationResult(status="INSUFFICIENT", answer=text, missing="")
     try:
-        data = json.loads(text[start:end + 1])
+        data = json.loads(text[start:end + 1], strict=False)
     except json.JSONDecodeError:
         return VerificationResult(status="INSUFFICIENT", answer=text, missing="")
     return VerificationResult(
