@@ -124,6 +124,7 @@ def build_evidence_chunks(documents):
                 "publication_date": doc.get("publication_date"),
                 "study_type": study_type,
                 "is_retracted": retracted,
+                "url": doc.get("url") or doc.get("source_url"),
             })
 
     return chunks
