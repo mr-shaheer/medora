@@ -10,8 +10,8 @@ MCP_SERVERS = {
         "name": "ClinicalTrials",
         "url": "https://clinicaltrials.caseyjhand.com/mcp",
     },
-    "openfda": {
-        "name": "OpenFDA",
+    "fda": {
+        "name": "FDA",
         "url": "https://openfda.caseyjhand.com/mcp",
     },
 }
