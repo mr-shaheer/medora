@@ -7,6 +7,8 @@ def rerank(candidates: list[dict], study_types_priority: list[str] | None = None
             relevance = -chunk["rrf_score"]
         else:
             relevance = chunk.get("distance", 0.0)
-        return (type_rank, relevance)
+        year = str(chunk.get("publication_date") or "")[:4]
+        year = int(year) if year.isdigit() else 0
+        return (type_rank, -(year // 5), relevance)
 
     return sorted(candidates, key=score)[:top_k]
