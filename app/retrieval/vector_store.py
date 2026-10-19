@@ -24,6 +24,7 @@ def get_connection() -> psycopg.Connection:
             doi TEXT,
             study_id TEXT,
             title TEXT,
+            url TEXT,
             publication_date TEXT,
             study_type TEXT,
             is_retracted BOOLEAN DEFAULT FALSE,
@@ -33,7 +34,9 @@ def get_connection() -> psycopg.Connection:
             last_accessed_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
     """)
-
+    conn.execute(
+    f"ALTER TABLE {TABLE} ADD COLUMN IF NOT EXISTS url TEXT"
+)
     conn.execute(f"ALTER TABLE {TABLE} ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now()")
     conn.execute(f"ALTER TABLE {TABLE} ADD COLUMN IF NOT EXISTS last_accessed_at TIMESTAMPTZ NOT NULL DEFAULT now()")
     conn.execute(f"""
@@ -92,12 +95,12 @@ async def upsert_chunks(conn: psycopg.Connection, chunks: list[dict]) -> None:
         conn.execute(
             f"""INSERT INTO {TABLE}
                 (chunk_id, content, source, pmid, doi, study_id, title,
-                 publication_date, study_type, is_retracted, embedding)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                publication_date, study_type, is_retracted, embedding, url)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (chunk_id) DO NOTHING""",
             (chunk["chunk_id"], chunk["content"], chunk["source"], chunk["pmid"],
-             chunk["doi"], chunk["study_id"], chunk["title"], chunk["publication_date"],
-             chunk["study_type"], chunk["is_retracted"], vector),
+            chunk["doi"], chunk["study_id"], chunk["title"], chunk["publication_date"],
+            chunk["study_type"], chunk["is_retracted"], vector, chunk.get("url")),
         )
     print(f"Successfully stored {len(new_chunks)} chunks.")
 
@@ -150,9 +153,9 @@ MAX_SEMANTIC_DISTANCE = float(os.getenv("MAX_SEMANTIC_DISTANCE", "0.8"))
 async def semantic_search(conn: psycopg.Connection, query: str, top_k: int = 20, max_distance: float = MAX_SEMANTIC_DISTANCE) -> list[dict]:
     [query_vector] = await embed([query])
     rows = conn.execute(
-        f"""SELECT chunk_id, content, source, pmid, doi, study_id, title,
-                   publication_date, study_type, is_retracted,
-                   embedding <-> %s::vector AS distance
+        f"""SELECT chunk_id, content, source, pmid, doi, study_id, title, url,
+       publication_date, study_type, is_retracted,
+       embedding <-> %s::vector AS distance
             FROM {TABLE}
             WHERE is_retracted = FALSE
               AND embedding <-> %s::vector <= %s
@@ -160,8 +163,11 @@ async def semantic_search(conn: psycopg.Connection, query: str, top_k: int = 20,
             LIMIT %s""",
         (query_vector, query_vector, max_distance, query_vector, top_k),
     ).fetchall()
-    columns = ["chunk_id", "content", "source", "pmid", "doi", "study_id", "title",
-               "publication_date", "study_type", "is_retracted", "distance"]
+    columns = [
+    "chunk_id", "content", "source", "pmid", "doi", "study_id",
+    "title", "url", "publication_date", "study_type",
+    "is_retracted", "distance"
+]
     results = [dict(zip(columns, row)) for row in rows]
     touch_accessed(conn, [r["chunk_id"] for r in results])
     return results
@@ -174,9 +180,9 @@ def keyword_search(conn: psycopg.Connection, query: str, top_k: int = 20) -> lis
     embeddings can blur together.
     """
     rows = conn.execute(
-        f"""SELECT chunk_id, content, source, pmid, doi, study_id, title,
-                   publication_date, study_type, is_retracted,
-                   ts_rank(content_tsv, websearch_to_tsquery('english', %s)) AS rank
+        f"""SELECT chunk_id, content, source, pmid, doi, study_id, title, url,
+       publication_date, study_type, is_retracted,
+       ts_rank(content_tsv, websearch_to_tsquery('english', %s)) AS rank
             FROM {TABLE}
             WHERE is_retracted = FALSE
             AND content_tsv @@ websearch_to_tsquery('english', %s)
@@ -184,8 +190,11 @@ def keyword_search(conn: psycopg.Connection, query: str, top_k: int = 20) -> lis
             LIMIT %s""",
         (query, query, top_k),
     ).fetchall()
-    columns = ["chunk_id", "content", "source", "pmid", "doi", "study_id", "title",
-               "publication_date", "study_type", "is_retracted", "rank"]
+    columns = [
+    "chunk_id", "content", "source", "pmid", "doi", "study_id",
+    "title", "url", "publication_date", "study_type",
+    "is_retracted", "rank"
+]
     results = [dict(zip(columns, row)) for row in rows]
     touch_accessed(conn, [r["chunk_id"] for r in results])
     return results
