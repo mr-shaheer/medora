@@ -2,7 +2,7 @@ import json
 from dataclasses import dataclass
 
 from agents import Agent, Runner
-from app.model import high_model
+from app.model import get_model
 from .evidence_reasoner import format_evidence
 
 INSTRUCTIONS = """You are a grounding and verification checker for medical
@@ -57,7 +57,6 @@ Use \\n for line breaks inside the "answer" string.
 verifier_agent = Agent(
     name="GroundingVerifier",
     instructions=INSTRUCTIONS,
-    model=high_model,
 )
 
 
@@ -100,6 +99,6 @@ Evidence:
 {format_evidence(chunks)}
 """
 
-    result = await Runner.run(verifier_agent, prompt)
+    result = await Runner.run(verifier_agent.clone(model=get_model()), prompt)
 
     return _parse(result.final_output)
