@@ -1,5 +1,5 @@
 from agents import Agent, Runner
-from app.model import high_model
+from app.model import get_model
 
 INSTRUCTIONS = """You are a biomedical evidence reasoner.
 You will be given a research question and a list of evidence chunks, each
@@ -36,7 +36,6 @@ State the publication year range of the studies and note if the most recent evid
 reasoner_agent = Agent(
     name="EvidenceReasoner",
     instructions=INSTRUCTIONS,
-    model=high_model,
 )
 
 
@@ -50,5 +49,5 @@ def format_evidence(chunks: list[dict]) -> str:
 
 async def reason_over_evidence(question: str, chunks: list[dict]) -> str:
     prompt = f"Question: {question}\n\nEvidence:\n{format_evidence(chunks)}"
-    result = await Runner.run(reasoner_agent, prompt)
+    result = await Runner.run(reasoner_agent.clone(model=get_model()), prompt)
     return result.final_output
