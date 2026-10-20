@@ -2,7 +2,7 @@ from typing import Literal
 from pydantic import BaseModel
 from agents import AsyncOpenAI
 
-from app.model import external_client
+from app.model import get_gemini_client
 from .metadata import MCPS
 
 ROUTER_MODEL = "gemini-2.5-flash"
@@ -13,7 +13,7 @@ class RouterResult(BaseModel):
 
 
 async def llm_router(question: str) -> RouterResult:
-    completion = await external_client.chat.completions.parse(
+    completion = await get_gemini_client().chat.completions.parse( 
         model=ROUTER_MODEL,
         messages=[
             {
