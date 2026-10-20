@@ -62,7 +62,7 @@ RULES = {
         ],
     },
 
-    "openfda": {
+    "fda": {
         "strong": [
             "fda",
             "approved",
