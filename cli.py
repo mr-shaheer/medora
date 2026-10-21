@@ -1,9 +1,12 @@
+import os
 import asyncio
 from app.pipeline import run
+from app.model import use_key
 from app.retrieval.vector_store import get_connection, purge_retracted, expire_stale, enforce_row_cap, TTL_DAYS, MAX_ROWS
 
 MAINTENANCE_INTERVAL_HOURS = 24
 
+use_key(os.getenv("DEV_GEMINI_KEY"))
 
 def run_maintenance() -> None:
 
