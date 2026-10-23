@@ -1,26 +1,42 @@
 import os
+from contextvars import ContextVar
+from functools import lru_cache
+
 from agents import AsyncOpenAI, OpenAIChatCompletionsModel
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv
 
 load_dotenv()
 
-external_client = AsyncOpenAI(
-    api_key = os.getenv("GEMINI_API_KEY"),
-    base_url = "https://generativelanguage.googleapis.com/v1beta/openai/",
-)
+GEMINI_BASE_URL = os.getenv("GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
+GEMINI_CHAT_MODEL = "gemini-2.5-flash"
 
-high_model = OpenAIChatCompletionsModel(
-    model = "gemini-3.5-flash",
-    openai_client=external_client
-)
+_current_key: ContextVar[str | None] = ContextVar("gemini_key", default=None)
 
-low_model = OpenAIChatCompletionsModel(
-    model = "gemini-2.5-flash",
-    openai_client = external_client
-)
+
+class MissingKeyError(Exception):
+    """Raised when something tries to call Gemini but no user key was set."""
+
+
+def use_key(key: str | None) -> None:
+    """Call once at the start of a request: all Gemini calls after it use this key."""
+    _current_key.set(key)
+
+
+@lru_cache(maxsize=64)
+def _client_for(key: str) -> AsyncOpenAI:
+    return AsyncOpenAI(api_key=key, base_url=GEMINI_BASE_URL)
+
 
 def get_gemini_client() -> AsyncOpenAI:
-    return external_client
+    key = _current_key.get()
+    if not key:
+        raise MissingKeyError("No Gemini API key. Add yours under Profile > API keys.")
+    return _client_for(key)
+
+
+def get_model() -> OpenAIChatCompletionsModel:
+    return OpenAIChatCompletionsModel(model=GEMINI_CHAT_MODEL, openai_client=get_gemini_client())
+
 
 GEMINI_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1536"))
