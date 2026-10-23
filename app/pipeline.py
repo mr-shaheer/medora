@@ -3,11 +3,11 @@ import json
 from app.retrieval.rerank import rerank
 from agents import Agent, Runner, trace
 
-from app.model import high_model
+from app.model import get_model
 from app.agents.verifier import verify_answer
 from app.mcp.mcp_client import get_medical_server
 from app.router.main_router import route_query
-from app.retrieval.evidence_pool import build_evidence_chunks
+from app.retrieval.evidence_pool import build_evidence_chunks, deduplicate
 from app.agents.evidence_reasoner import reason_over_evidence
 from app.retrieval.vector_store import get_connection, upsert_chunks, hybrid_search
 from agents.exceptions import MaxTurnsExceeded
@@ -21,8 +21,11 @@ Return ONLY a JSON object with exactly these two keys:
 {
   "study_types_priority": ["meta-analysis", "rct", "cohort", "case-report"],
   "documents": [
-    { ...raw document fields: source, pmid, doi, study_id, title,
-       publication_date, status/overall_status/recruitment_status, abstract/summary/text... }
+    
+    { ...raw document fields: source, url, source_url, pmid, doi,
+      study_id, title, publication_date,
+      status/overall_status/recruitment_status,
+      abstract/summary/text... }
   ]
 }
 
@@ -37,6 +40,7 @@ Return ONLY a JSON object with exactly these two keys:
 - Always include the trial's recruitment/overall status field if present
   in the source data (e.g. RECRUITING, ACTIVE_NOT_RECRUITING, COMPLETED).
   Never omit it even if not asked about directly.
+- Prefer recent systematic reviews, meta-analyses and clinical guidelines when available.
 - Do not summarize or answer the question.
 - Do not invent documents.
 """
@@ -55,8 +59,10 @@ def _extract_json(text: str) -> dict:
         "documents": data.get("documents", []),
     }
 
-async def plan_and_retrieve(question: str) -> tuple[list[str], list[dict]]:
+async def plan_and_retrieve(question: str, on_route=None) -> tuple[list[str], list[dict]]:
     decision = await route_query(question)
+    if on_route:
+        on_route(decision)
 
     print(
         f">>> MCP ROUTER: {', '.join(decision.sources)} "
@@ -75,7 +81,7 @@ async def plan_and_retrieve(question: str) -> tuple[list[str], list[dict]]:
         retriever_agent = Agent(
             name = "MedicalEvidenceRetriever",
             instructions = RETRIEVER_INSTRUCTIONS,
-            model = high_model,
+            model = get_model(),
             mcp_servers = servers,
         )
 
@@ -166,3 +172,74 @@ async def run(question: str) -> str:
             top_k += 15
             select_k += 5
             max_distance += 0.2
+
+
+async def run_stream(question: str):
+
+    route: dict = {}
+
+    def on_route(decision):
+        route.update(sources=list(decision.sources), confidence=float(decision.confidence))
+
+    def result(answer, status, missing, selected, counts):
+        return {"type": "result", "route": route, "counts": counts,
+                "status": status, "missing": missing, "answer": answer, "chunks": selected}
+
+    with trace("Medical Research Pipeline"):
+        yield {"type": "stage", "index": 0}
+        study_priority, raw_documents = await plan_and_retrieve(question, on_route=on_route)
+
+        yield {"type": "stage", "index": 1}
+        chunks = build_evidence_chunks(raw_documents)
+        counts = {
+            "retrieved": len(raw_documents),
+            "unique": len(deduplicate(raw_documents)),
+            "retracted": len({c["chunk_id"].rsplit("_", 1)[0] for c in chunks if c["is_retracted"]}),
+        }
+        conn = get_connection()
+        try:
+            await upsert_chunks(conn, chunks)
+
+            top_k, select_k, max_distance = 20, 10, 0.8
+            attempt = 0
+            previous_ids: set[str] = set()
+
+            while True:
+                candidates = await hybrid_search(conn, question, top_k=top_k, max_distance=max_distance)
+                selected = rerank(candidates, study_priority, top_k=select_k)
+
+                if not selected:
+                    if attempt >= MAX_REFLECT_ATTEMPTS:
+                        yield result("Insufficient evidence to answer.", "INSUFFICIENT",
+                                     "No relevant evidence was found for this question.", [], counts)
+                        return
+                    attempt += 1
+                    top_k += 15
+                    select_k += 5
+                    max_distance += 0.2
+                    continue
+
+                current_ids = {c["chunk_id"] for c in selected}
+                if attempt > 0 and current_ids == previous_ids:
+                    yield result("Insufficient evidence to answer.", "INSUFFICIENT",
+                                 "A broader search returned the same evidence.", selected, counts)
+                    return
+                previous_ids = current_ids
+
+                yield {"type": "stage", "index": 2}
+                draft = await reason_over_evidence(question, selected)
+
+                yield {"type": "stage", "index": 3}
+                verdict = await verify_answer(question, draft, selected)
+
+                if verdict.status == "SUFFICIENT" or attempt >= MAX_REFLECT_ATTEMPTS:
+                    yield result(verdict.answer, verdict.status, verdict.missing, selected, counts)
+                    return
+
+                attempt += 1
+                top_k += 15
+                select_k += 5
+                max_distance += 0.2
+                yield {"type": "stage", "index": 1}
+        finally:
+            conn.close()
