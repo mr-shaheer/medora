@@ -14,7 +14,7 @@ async function call(path, body, method = 'POST') {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(typeof data.detail === 'string' ? data.detail : 'Please check the details you entered.');
+    throw new Error(typeof data.detail === 'string' ? data.detail : 'Incorrect Details!');
   }
   return data;
 }
