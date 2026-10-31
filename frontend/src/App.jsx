@@ -91,7 +91,7 @@ export default function App() {
   const clearHistory = () => setHistory([]);
   return (
     <>
-      <Header inWork={view === 'work'} savedCount={saved.length} onDrawer={setDrawer} onNew={home} />
+      <Header inWork={view === 'work'} savedCount={saved.length} onDrawer={setDrawer} onNew={home} drawer={drawer} />
       {view === 'home'
         ? <Hero onSubmit={ask} />
         : <Workspace key={question} question={question} stage={stage} result={result} error={error} saved={saved.some((s) => s.q === question)} onSave={toggleSave} onSubmit={ask} onRetry={() => ask(question)} />}
