@@ -2,6 +2,7 @@ import Robot from './Robot.jsx';
 import QueryBox from './QueryBox.jsx';
 import { Icon, SOURCES } from './ui.jsx';
 import { EXAMPLES } from '../constants';
+import { useEffect } from 'react';
 
 const CAPS = [
   { icon: 'search', t: 'Real-time research', s: Object.values(SOURCES).join(', ') },
@@ -9,6 +10,11 @@ const CAPS = [
   { icon: 'shield', t: 'Evidence verification', s: 'Every claim checked and cited' },
 ];
 export default function Hero({ onSubmit }) {
+
+  useEffect(() => {
+    document.documentElement.classList.add('no-page-scroll');
+    return () => document.documentElement.classList.remove('no-page-scroll');
+  }, []);
   return (
     <main className="hero">
       <section className="hero-left">
