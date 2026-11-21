@@ -61,7 +61,7 @@ small{color:var(--mute)}
 
 /* theme switch — Medora day / night capsule */
 .theme-toggle{
-  --tt-w:88px;--tt-h:32px;--tt-speed:.62s;--tt-ease:cubic-bezier(.4,-.12,.28,1.18);
+  --tt-w:78px;--tt-h:32px;--tt-speed:.62s;--tt-ease:cubic-bezier(.4,-.12,.28,1.18);
   --tt-orb:calc(var(--tt-h) * .46);--tt-travel:calc(var(--tt-w) * .84 - var(--tt-orb));
   --tt-bot-travel:calc(var(--tt-w) * -.36);
   --tt-cloud:rgba(255,255,255,.9);
