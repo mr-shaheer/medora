@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Medora · Clinical Agentic System</title>
+    <script>
+      // Apply the saved theme before first paint so reloads never flash the wrong one.
+      try {
+        document.documentElement.dataset.theme = localStorage.getItem('medora.theme') === 'dark' ? 'dark' : 'light';
+      } catch (e) {
+        document.documentElement.dataset.theme = 'light';
+      }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
