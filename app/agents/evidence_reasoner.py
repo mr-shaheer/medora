@@ -47,6 +47,7 @@ def format_evidence(chunks: list[dict]) -> str:
     return "\n\n".join(lines)
 
 
+
 async def reason_over_evidence(question: str, chunks: list[dict]) -> str:
     prompt = f"Question: {question}\n\nEvidence:\n{format_evidence(chunks)}"
     result = await Runner.run(reasoner_agent.clone(model=get_model()), prompt)
