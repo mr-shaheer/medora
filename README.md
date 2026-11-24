@@ -2,7 +2,7 @@
 
 # 🧬 Medora
 
-### An autonomous agentic system for discovering and synthesizing clinical evidence.
+### An autonomous agentic system for discovering and synthesizing clinical evidence
 
 *Multi-source medical research, trusted evidence and clear answers - designed to make complex medical information easier to explore and understand.*
 
