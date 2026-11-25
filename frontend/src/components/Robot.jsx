@@ -3,9 +3,26 @@ export default function Robot() {
     <svg className="robot" viewBox="0 0 320 400" role="img" aria-label="Medora, a friendly clinical assistant robot">
       <defs>
         <linearGradient id="sh" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#fff" /><stop offset="1" stopColor="#E3EEF2" /></linearGradient>
-        <filter id="bl"><feGaussianBlur stdDeviation="9" /></filter>
+        <radialGradient id="shadowAmbient">
+          <stop className="rs-a" offset="0" stopOpacity=".55" />
+          <stop className="rs-a" offset=".5" stopOpacity=".24" />
+          <stop className="rs-a" offset="1" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="shadowContact">
+          <stop className="rs-c" offset="0" stopOpacity=".85" />
+          <stop className="rs-c" offset=".6" stopOpacity=".35" />
+          <stop className="rs-c" offset="1" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="shadowGlow">
+          <stop className="rs-g" offset="0" stopOpacity=".3" />
+          <stop className="rs-g" offset="1" stopOpacity="0" />
+        </radialGradient>
       </defs>
-      <ellipse cx="160" cy="372" rx="70" ry="10" fill="#00D4E0" opacity=".45" filter="url(#bl)" />
+      <g className="robot-shadow" aria-hidden="true">
+        <ellipse className="rs rs-glow" cx="160" cy="374" rx="92" ry="20" fill="url(#shadowGlow)" />
+        <ellipse className="rs rs-ambient" cx="160" cy="373" rx="82" ry="15" fill="url(#shadowAmbient)" />
+        <ellipse className="rs rs-contact" cx="160" cy="372" rx="52" ry="8" fill="url(#shadowContact)" />
+      </g>
       <g className="float">
         <rect x="92" y="205" width="136" height="150" rx="56" fill="url(#sh)" stroke="#D5E3E8" />
         <path d="M152 214c-14 44-6 80 22 92" fill="none" stroke="#1B2A30" strokeWidth="4" strokeLinecap="round" />
