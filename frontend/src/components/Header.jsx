@@ -7,10 +7,26 @@ export default function Header({ onNew, onDrawer, savedCount, inWork, drawer }) 
   const [stuck, setStuck] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setStuck(window.scrollY > 8);
-    onScroll();
+    let raf = 0;
+    let last = -1;
+    const update = () => {
+      raf = 0;
+      const raw = Math.min(1, window.scrollY / 120);
+      const progress = raw * raw * (3 - 2 * raw); // smoothstep: gentle start and stop
+      if (progress !== last) {
+        document.documentElement.style.setProperty('--header-progress', progress.toFixed(3));
+        last = progress;
+      }
+      setStuck(window.scrollY > 8);
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
+    update();
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+      document.documentElement.style.removeProperty('--header-progress');
+    };
   }, []);
 
   return (
