@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Header from './components/Header.jsx';
 import Hero from './components/Hero.jsx';
+import Sections from './components/Sections.jsx';
 import Workspace from './components/Workspace.jsx';
 import Drawer from './components/Drawer.jsx';
 import { research, STAGES } from './api';
@@ -93,7 +94,7 @@ export default function App() {
     <>
       <Header inWork={view === 'work'} savedCount={saved.length} onDrawer={setDrawer} onNew={home} drawer={drawer} />
       {view === 'home'
-        ? <Hero onSubmit={ask} />
+        ? <><Hero onSubmit={ask} /><Sections onSubmit={ask} /></>
         : <Workspace key={question} question={question} stage={stage} result={result} error={error} saved={saved.some((s) => s.q === question)} onSave={toggleSave} onSubmit={ask} onRetry={() => ask(question)} />}
       {drawer && <Drawer tab={drawer} setTab={setDrawer} history={history.filter((h) => h.result)} saved={saved} onAsk={openHistory} onOpenSaved={openHistory} onDelete={deleteHistory} onDeleteSaved={deleteSaved} onClearAll={clearHistory} onClose={() => setDrawer(null)} />}
       {needKeyFor && (
